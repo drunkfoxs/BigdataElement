@@ -11,6 +11,8 @@ import org.apache.hadoop.mapreduce.lib.input.TextInputFormat
 import org.apache.hadoop.io.Text
 import org.apache.hadoop.mapred.lib.MultipleTextOutputFormat
 
+import scala.collection.mutable.LinkedHashSet
+
 /**
  * Created by liziyao on 15/7/16.
  */
@@ -120,14 +122,33 @@ object Low2High {
       val result = tmp.flatMap( x => comput(x,bidui))
       result.toList
     }
+    def Filter(input:List[(String, String, Double)]):List[List[String]]={
+      var tmp = ArrayBuffer[LinkedHashSet[String]]()
+      for ( i <- 0 to input.size-1){
+        val ls = LinkedHashSet(input(i)._1,input(i)._2,input(i)._3+"")
+        tmp = tmp :+ ls
+      }
+      val result = tmp.distinct.filter(x => x.size>2).map( x => x.toList).toList
+      result
+    }
+    def draw(input:(String, List[List[String]])):(String, List[List[String]])={
+      var head = input._1
+      var tmp = ArrayBuffer[String]()
+      for( i <- 0 to input._2.size-1){
+        val a = input._2(i)(0).split("_")(1)
+        val b = input._2(i)(1).split("_")(1)
+        tmp = tmp :+ a
+        tmp = tmp :+ b
+      }
+      val tail = tmp.toList.distinct.mkString("+")
+      head = head + "+" + tail
+      return (head,input._2)
+    }
 
-    val result = ww.map( x => (x._1,ee(x._2))).filter( x => x._2.size !=0).map( x => (x._1,x._2.mkString("\n").replaceAll("[()]","")))
-    //result.saveAsTextFile(OUTPUT_FILE)
-    //------------------------------------------上面是输出关联对------------------------
-//    wifi.distinct.saveAsTextFile(OUTPUT_FILE)
-//    sc.stop()
+    val result = ww.map( x => (x._1,ee(x._2))).filter( x => x._2.size !=0)
+    val RE = result.map( x => (x._1,Filter(x._2))).filter( x => x._2.size !=0)
+    val ree = RE.map( x => draw(x))
 
-    //val tmp_1 = tmp.map( x => (x._1._2,(x._1._1,x._2._1,x._3))).groupByKey.map( x => (x._1,x._2.toList))
 
 
     class RDDMultipleTextOutputFormat extends MultipleTextOutputFormat[Any, Any] {
@@ -138,7 +159,7 @@ object Low2High {
         key.asInstanceOf[String]
     }
 
-    result.distinct().partitionBy(new HashPartitioner(5)).saveAsHadoopFile(OUTPUT_FILE,classOf[String],classOf[String],classOf[RDDMultipleTextOutputFormat])
+    ree.partitionBy(new HashPartitioner(5)).saveAsHadoopFile(OUTPUT_FILE,classOf[String],classOf[String],classOf[RDDMultipleTextOutputFormat])
 //    wifi.saveAsHadoopFile(OUTPUT_FILE,classOf[String],classOf[String],classOf[RDDMultipleTextOutputFormat])
   }
 }
